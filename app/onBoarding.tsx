@@ -30,12 +30,12 @@ export default function OnboardingScreen() {
     if (index < steps.length - 1) {
       setIndex(index + 1);
     } else {
-      router.push('/(auth)/login'); 
+      router.replace('/(auth)/login'); 
     }
   };
 
   const onSkip = () => {
-    router.push('/(auth)/login');
+    router.replace('/(auth)/login');
   };
 
   return (

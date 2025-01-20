@@ -33,6 +33,8 @@ export default function RootLayout() {
         <Stack.Screen name="home"/>
         <Stack.Screen name="(auth)/login"/>
         <Stack.Screen name="(auth)/register"/>
+        <Stack.Screen name="(auth)/registerOtp"/>
+        <Stack.Screen name="(auth)/forgotPassword"/>
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

@@ -1,40 +1,111 @@
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
-import { View, Text, StyleSheet, SafeAreaView, Switch } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView, Switch, Alert } from "react-native";
 import { ThemedTitle } from '@/components/ThemedTitle';
 import { ThemedText } from '@/components/ThemedText';
 import InputText from '@/components/ui/InputText'; 
 import PasswordInput from '@/components/ui/PasswordInput'; 
 import Button from '@/components/ui/Button'; 
 import Link from '@/components/ui/Link';
-import useSettings from '../../hooks/useSettings'; 
+import useSettings from '@/hooks/useSettings'; 
 import LottieView from 'lottie-react-native';
-import { useAuth } from '../../hooks/useAuth';
-import { useAsyncStorage } from "@react-native-async-storage/async-storage";
+import { useAuth } from '@/hooks/useAuth';
+import Toast from 'react-native-toast-message';
+import ToastHelper from '@/utils/ToastHelper';
+import { RoleEnum } from '@/constants/enums/RoleEnum';
+import { StatusEnum } from '@/constants/enums/StatusEnum';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { handleLogin, loading, error } = useAuth();
   const { language, theme, translation, colors } = useSettings(); 
-  const { setItem } = useAsyncStorage('assetToken');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(false);
 
+  const validateForm = async () => {
+    const [emailValid, passwordValid] = await Promise.all([
+      validateEmail(email),
+      validatePassword(password)
+    ]);
+    
+    return emailValid && passwordValid;
+  };
+
   const onLogin = async () => {
+    const errorTitle = translation.loginFailed || 'Login Failed';
+
     try {
+      if (!(await validateForm())) return;
+
       const data = await handleLogin(email, password);
       console.log('Login Success:', data);
+      const user = data.user;
 
-      if (data?.accessToken) {
-        await setItem(data.accessToken); 
+      const errorMessage = validateUser(user);
+      if(errorMessage) {
+        ToastHelper.showError(errorTitle, errorMessage);
+        return;
+      }
+
+      if (user.status === StatusEnum.PENDING) {
+        const message = translation.accountNotVerified || 'Your account is not verified. Please verify your email';
+        ToastHelper.showInfo(errorTitle, message);
+        router.replace({ pathname: "/(auth)/registerOtp", params: { email: user.email } });
       }
 
       router.replace("/home");
     } catch (err) {
-      console.error('Login Failed');
-      console.error(err);
+      const errorMessage = translation.loginFailedEmailOrPassword || 'Please check your email and password';
+      ToastHelper.showError(errorTitle, errorMessage);
     }
+  };
+
+  const validateUser = (user: any) => {
+    if (user.role === RoleEnum.ADMIN) 
+      return translation.accessDenied || 'Access denied. Please contact support.';
+    if(user.status === StatusEnum.DELETED)
+      return translation.userDeleted || 'User is deleted';
+    return null
+  }
+
+  const validateEmail = (email: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      let error: string | null = null;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      
+      if(!email.trim()) {
+        error = translation.inputRequired || 'This field is required';
+      } 
+      else if (!emailRegex.test(email)) {
+        error = translation.invalidEmail || 'Invalid email format';
+      }
+      
+      setEmailError(error);
+      resolve(error === null);
+    });
+  };
+
+  const validatePassword = (password: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      let error: string | null = null;
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      
+      if(!password.trim()) {
+        error = translation.inputRequired || 'This field is required';
+      }
+      else if (password.length < 8) {
+        error = translation.passwordLength || 'Password must be at least 8 characters';
+      }
+      else if (!passwordRegex.test(password)) {
+        error = translation.passwordFormat || 'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character';
+      }
+      
+      setPasswordError(error);
+      resolve(error === null);
+    });
   };
 
   const onLoginWithGoogle = () => {
@@ -48,6 +119,10 @@ export default function LoginScreen() {
   const handleSignUp = () => {
     router.replace("/(auth)/register");
   };
+
+  const handleForgotPassword = () => {
+    router.replace("/(auth)/forgetPassword");
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -65,20 +140,34 @@ export default function LoginScreen() {
                 <InputText
                     label={translation.emailLabel || 'Email'}
                     value={email}
-                    onChangeText={setEmail}
                     placeholder={translation.emailPlaceholder || 'Enter your email'}
                     lightColor="#333"
                     darkColor="#fff"
                     icon="email" 
+                    onChangeText={(email) => {
+                      setEmail(email.trim());
+                      validateEmail(email);
+                    }}
                 />
+
+                <Text style={{ color: 'red', textAlign: 'left', marginHorizontal: 15 }}>
+                  {emailError}
+                </Text>
                 <PasswordInput
                     label={translation.passwordLabel || 'Password'}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(password)=> {
+                      setPassword(password);
+                      validatePassword(password);
+                    }}
                     placeholder={translation.passwordPlaceholder || 'Enter your password'}
                     lightColor="#333"
                     darkColor="#fff"
                 />
+                
+                <Text style={{ color: 'red', textAlign: 'left', marginHorizontal: 15 }}>
+                  {passwordError}
+                </Text>
                 <View style={styles.forgetAndRememberContainer}>
                 <View style={styles.rememberMeContainer}>
                     <Switch 
@@ -94,8 +183,8 @@ export default function LoginScreen() {
 
                   <Link
                       title={translation.forgetPasswordLabel || 'Forgot password?'}
-                      onPress={() => console.log('Forgot password')}
                       textColor={colors.link}
+                      onPress={handleForgotPassword}
                   />
                 </View>
 
@@ -135,6 +224,7 @@ export default function LoginScreen() {
                 </View>
             </View>
         </View>
+        <Toast/>
     </SafeAreaView>
   );
 }

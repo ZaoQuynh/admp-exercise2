@@ -3,13 +3,12 @@ import { View, Text, ImageBackground , StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import useSettings from '../hooks/useSettings';
 import { ThemedView } from '@/components/ThemedView';
-import { useAsyncStorage } from "@react-native-async-storage/async-storage";
+import { useAuth } from '@/hooks/useAuth';
 
 const SplashScreen = () => {
   const router = useRouter();
   const { language, theme, translation, colors } = useSettings(); 
-  const [accessToken, setAccessToken] = useState('');
-  const {getItem, setItem} = useAsyncStorage('assetToken');
+  const { accessToken } = useAuth();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -20,9 +19,8 @@ const SplashScreen = () => {
   }, []);
 
   const checkLogin = async () => {
-    const token = await getItem();
+    const token = await accessToken();
     console.log('Token:', token);
-    token && setAccessToken(token);
     if(token) {
       router.replace("/home");
     } else {
